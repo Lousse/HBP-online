@@ -33,14 +33,14 @@ X = sequence.pad_sequences(url_tokens, maxlen=max_len)
 Y = np.array(data['label'])
 print('Matrix dimensions of X: ', X.shape, 'Vector dimension of target: ', Y.shape)
 
-class BiLSTM(nn.Module):
-    def __init__(self, vocab_size,embedding_dim,hidden_dim, padding_idx, n_classes,static=True, max_num_hidden_layers, n_layer, 
+class Bilstm(nn.Module):
+    def __init__(self, vocab_size,embedding_dim, padding_idx, n_classes,static=True, max_num_hidden_layers, n_layer, 
                  batch_size=1,b=0.99, n=0.01, s=0.2,dropout=0.2,use_cuda=False)):
 
         super(BiLSTM, self).__init__()
         
         self.vocab_size = vocab_size
-        self.hidden_dim = hidden_dim
+        #self.hidden_dim = hidden_dim
         self.batch_size = batch_size
         self.max_num_hidden_layers = max_num_hidden_layers
         self.n_layer = n_layer
@@ -58,13 +58,13 @@ class BiLSTM(nn.Module):
         if static:
             self.embedding.weight.requires_grad = False
         self.lstm = nn.LSTM(input_size=self.embedding.embedding_dim,
-                            hidden_size=hidden_dim,
+                            hidden_size=max_num_hidden_layers,
                             num_layers=n_layer, 
                             dropout = dropout,
                             bidirectional=True)
         
         self.outputs=[]
-        self.fc = nn.Linear(hidden_dim*lstm_layer*2, 1)
+        self.fc = nn.Linear(max_num_hidden_layers*n_layer*2, 1)
         self.dropout = nn.Dropout()
 
         self.alpha = Parameter(torch.Tensor(self.max_num_hidden_layers).fill_(1 / (self.max_num_hidden_layers + 1)),requires_grad=False).to(self.device)
@@ -181,7 +181,7 @@ class BiLSTM(nn.Module):
         self.load_state_dict(o_dict)
 
         
-class lstm_THS(clstm):
+class Bilstm_THS(clstm):
     def __init__(self, vocab_size,max_num_hidden_layers,embedding_dim,hidden_dim, padding_idx, static=True, n_classes,n_layer,
                   dropout, batch_size,b=0.99, n=0.01, s=0.2, use_cuda=False):
  
