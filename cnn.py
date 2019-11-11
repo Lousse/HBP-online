@@ -23,19 +23,6 @@ torch.manual_seed(SEED)
 #torch.cuda.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 
-'''
-printable = string.printable
-text = open('trainurl.csv', 'r').read()
-pruned_text = ''
-for line in text:
-    if text in printable:
-        pruned_text+=text  
-        
-X = data.Field(pruned_text)
-Y = data.LabelField()
-print(X,Y)
-'''
-
 data = pd.read_csv('data.csv',encoding='latin-1', error_bad_lines=False)
 data.label = [0 if i == 'good' else 1 for i in data.label]
 print('Data size: ', data.shape[0])
@@ -46,7 +33,7 @@ X = sequence.pad_sequences(url_tokens, maxlen=max_len)
 Y = np.array(data['label'])
 print('Matrix dimensions of X: ', X.shape, 'Vector dimension of target: ', Y.shape)
 
-class clstm(nn.Module):
+class cnn(nn.Module):
     def __init__(self, vocab_size,max_num_hidden_layers,embedding_dim, n_classes,n_filters,filter_size,
                   output_dim,dropout, batch_size=1,b=0.99, n=0.01, s=0.2, use_cuda=False):
         super(clstm, self).__init__()
@@ -76,9 +63,6 @@ class clstm(nn.Module):
         self.relu=nn.ReLU()
         self.maxpool=nn.MaxPool1d(kernel_size=(filter_size,embedding_dim)) 
         
-        self.lstm=[]
-        self.lstm = nn.LSTM(n_filters, max_num_hidden_layers, dropout)
-        
         self.outputs=[]
         self.fc = nn.Linear(max_num_hidden_layers, output_dim)
         self.dropout = nn.Dropout()
@@ -92,7 +76,6 @@ class clstm(nn.Module):
             self.outputs[i].weight.grad.data.fill_(0)
             self.embedding[i].weight.grad.data.fill_(0)
             self.conv[i].bias.grad.data.fill_(0)
-            self.lstm[i].bias.grad.data.fill_(0)
 
     def update_weights(self, X, Y, show_loss):
         Y = torch.from_numpy(Y).to(self.device)
@@ -113,19 +96,15 @@ class clstm(nn.Module):
             self.outputs[i].bias.data -= self.n * self.alpha[i] * self.outputs[i].bias.grad.data
             w.append(self.alpha[i] * self.embedding[i].weight.grad.data)
             w.append(self.alpha[i] * self.conv[i].weight.grad.data)
-            w.append(self.alpha[i] * self.lstm[i].weight.grad.data)
             b.append(self.alpha[i] * self.embedding[i].bias.grad.data)
             b.append(self.alpha[i] * self.conv[i].bias.grad.data)
-            b.append(self.alpha[i] * self.lstm[i].bias.grad.data)
             self.zero_grad()
 
         for i in range(1, len(losses_per_layer)):
             self.embedding[i].weight.data -= self.n * torch.sum(torch.cat(w[i:]))
             self.conv[i].weight.data -= self.n * torch.sum(torch.cat(w[i:]))
-            self.lstm[i].weight.data -= self.n * torch.sum(torch.cat(w[i:]))
             self.embedding[i].bias.data -= self.n * torch.sum(torch.cat(b[i:]))
             self.conv[i].bias.data -= self.n * torch.sum(torch.cat(b[i:]))
-            self.lstm[i].bias.data -= self.n * torch.sum(torch.cat(b[i:]))
 
         for i in range(len(losses_per_layer)):
             self.alpha[i] *= torch.pow(self.b, losses_per_layer[i])
@@ -151,31 +130,13 @@ class clstm(nn.Module):
                 self.loss_array.clear()
                 
                 
-    def forward(self,X):
-        '''
-        module_input=torch.Tensor(X).long().to(self.device)
-        #module_input = torch.from_numpy(X).float().to(self.device)
-        x = self.embedding(X)
-        x = self.sigmoid(X)
-        x = self.conv(X)
-        x = self.dropout(X)
-        x = self.relu(X)
-        x = self.maxpool(X)
-        x = self.lstm(X)
-        x = self.fc(X)
-        x = self.dropout(X)
-        x = self.alpha(X)
-        return module_input * X   
-        '''
-        
+    def forward(self,X):    
         hidden_connections = []
         X = torch.Tensor(X).long().to(self.device)
         x1 = F.sigmoid(self.embedding(X))
         hidden_connections.append(x1)
         x2 = F.sigmoid(self.conv(X))
         hidden_connections.append(x2)
-        x3 = F.sigmoid(self.lstm(X))
-        hidden_connections.append(x3)
 
         output_class = []
         for i in range(self.max_num_hidden_layers):
@@ -222,7 +183,7 @@ class clstm(nn.Module):
         self.load_state_dict(o_dict)
 
 
-class clstm_THS(clstm):
+class cnn_THS(clstm):
     def __init__(self, vocab_size,max_num_hidden_layers,embedding_dim, n_classes,n_filters,filter_size,
                   dropout, batch_size,b=0.99, n=0.01, s=0.2, use_cuda=False):
         super().__init__(vocab_size,max_num_hidden_layers,embedding_dim, n_classes,n_filters,filter_size,
