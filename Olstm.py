@@ -19,7 +19,7 @@ class_num=2
 batch_size=32
 dropout=0.5
 
-model = clstm(vocab_size, embedding_dim, hidden_dim, output_dim, n_layers, bidirectional,class_num,batch_size,output_dim, dropout)
+model = lstm(vocab_size, embedding_dim, max_num_hidden_layers, output_dim,n_classes ,batch_size,batch_size, dropout)
 
 X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.3, random_state=42, shuffle=True)
 
