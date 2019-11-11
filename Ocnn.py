@@ -4,7 +4,7 @@ import torch
 from sklearn.metrics import accuracy_score, balanced_accuracy_score
 from imblearn.datasets import make_imbalance
 import numpy as np
-from clstm import clstm,clstm_THS,X,Y
+from clstm import cnn,cnn_THS,X,Y
 import sklearn
 from sklearn.model_selection import train_test_split
 
@@ -20,7 +20,7 @@ class_num=2
 batch_size=32
 dropout=0.5
 
-model = clstm(vocab_size, embedding_dim, hidden_dim, output_dim, n_layers, bidirectional,class_num,batch_size,output_dim, dropout)
+model = cnn(vocab_size, embedding_dim, hidden_dim, output_dim, n_layers, bidirectional,class_num,batch_size,output_dim, dropout)
 
 X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.3, random_state=42, shuffle=True)
 
