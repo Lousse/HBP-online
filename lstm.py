@@ -23,18 +23,6 @@ torch.manual_seed(SEED)
 #torch.cuda.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 
-'''
-printable = string.printable
-text = open('trainurl.csv', 'r').read()
-pruned_text = ''
-for line in text:
-    if text in printable:
-        pruned_text+=text  
-        
-X = data.Field(pruned_text)
-Y = data.LabelField()
-print(X,Y)
-'''
 
 data = pd.read_csv('data.csv',encoding='latin-1', error_bad_lines=False)
 data.label = [0 if i == 'good' else 1 for i in data.label]
@@ -46,8 +34,8 @@ X = sequence.pad_sequences(url_tokens, maxlen=max_len)
 Y = np.array(data['label'])
 print('Matrix dimensions of X: ', X.shape, 'Vector dimension of target: ', Y.shape)
 
-class clstm(nn.Module):
-    def __init__(self, vocab_size,max_num_hidden_layers,embedding_dim, n_classes,n_filters,filter_size,
+class lstm(nn.Module):
+    def __init__(self, vocab_size,max_num_hidden_layers,embedding_dim, n_classes,
                   output_dim,dropout, batch_size=1,b=0.99, n=0.01, s=0.2, use_cuda=False):
         super(clstm, self).__init__()
 
@@ -56,28 +44,25 @@ class clstm(nn.Module):
 
         self.device = torch.device(
             "cuda:0" if torch.cuda.is_available() and use_cuda else "cpu")
-
+       
         self.vocab_size = vocab_size
+        self.output_size = output_dim
         self.max_num_hidden_layers = max_num_hidden_layers
         self.n_classes = n_classes
-        self.batch_size = batch_size       
+        self.batch_size = batch_size 
+        self.embedding_dim = embedding_dim
         
         self.b = Parameter(torch.tensor(b), requires_grad=False).to(self.device)
         self.n = Parameter(torch.tensor(n), requires_grad=False).to(self.device)
         self.s = Parameter(torch.tensor(s), requires_grad=False).to(self.device)
 
         self.embedding = []
-        self.embedding = nn.Embedding(vocab_size, embedding_dim,dropout)
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.sigmoid=nn.Sigmoid()
         
-        self.conv=[]
-        self.conv = nn.Conv1d(in_channels=1, out_channels=n_filters, kernel_size=(filter_size,embedding_dim))
-        self.dropout = nn.Dropout()
-        self.relu=nn.ReLU()
-        self.maxpool=nn.MaxPool1d(kernel_size=(filter_size,embedding_dim)) 
         
         self.lstm=[]
-        self.lstm = nn.LSTM(n_filters, max_num_hidden_layers, dropout)
+        self.lstm = nn.LSTM(embedding_dim, max_num_hidden_layers)
         
         self.outputs=[]
         self.fc = nn.Linear(max_num_hidden_layers, output_dim)
@@ -91,7 +76,6 @@ class clstm(nn.Module):
         for i in range(self.max_num_hidden_layers):
             self.outputs[i].weight.grad.data.fill_(0)
             self.embedding[i].weight.grad.data.fill_(0)
-            self.conv[i].bias.grad.data.fill_(0)
             self.lstm[i].bias.grad.data.fill_(0)
 
     def update_weights(self, X, Y, show_loss):
@@ -112,19 +96,15 @@ class clstm(nn.Module):
             self.outputs[i].weight.data -= self.n * self.alpha[i] * self.outputs[i].weight.grad.data
             self.outputs[i].bias.data -= self.n * self.alpha[i] * self.outputs[i].bias.grad.data
             w.append(self.alpha[i] * self.embedding[i].weight.grad.data)
-            w.append(self.alpha[i] * self.conv[i].weight.grad.data)
             w.append(self.alpha[i] * self.lstm[i].weight.grad.data)
             b.append(self.alpha[i] * self.embedding[i].bias.grad.data)
-            b.append(self.alpha[i] * self.conv[i].bias.grad.data)
             b.append(self.alpha[i] * self.lstm[i].bias.grad.data)
             self.zero_grad()
 
         for i in range(1, len(losses_per_layer)):
             self.embedding[i].weight.data -= self.n * torch.sum(torch.cat(w[i:]))
-            self.conv[i].weight.data -= self.n * torch.sum(torch.cat(w[i:]))
             self.lstm[i].weight.data -= self.n * torch.sum(torch.cat(w[i:]))
             self.embedding[i].bias.data -= self.n * torch.sum(torch.cat(b[i:]))
-            self.conv[i].bias.data -= self.n * torch.sum(torch.cat(b[i:]))
             self.lstm[i].bias.data -= self.n * torch.sum(torch.cat(b[i:]))
 
         for i in range(len(losses_per_layer)):
@@ -149,33 +129,29 @@ class clstm(nn.Module):
                 print("Alpha:" + str(self.alpha.data.cpu().numpy()))
                 print("Training Loss: " + str(loss))
                 self.loss_array.clear()
-                
+    '''
+    def forward(self, x, batch_size=None):
+		input = self.embedding(x) 
+		input = input.permute(1, 0, 2) # input.size() = (num_sequences, batch_size, embedding_length)
+		if batch_size is None:
+			h_0 = Variable(torch.zeros(1, self.batch_size, self.hidden_size).cuda()) # Initial hidden state of the LSTM
+			c_0 = Variable(torch.zeros(1, self.batch_size, self.hidden_size).cuda()) # Initial cell state of the LSTM
+		else:
+			h_0 = Variable(torch.zeros(1, batch_size, self.hidden_size).cuda())
+			c_0 = Variable(torch.zeros(1, batch_size, self.hidden_size).cuda())
+		output, (final_hidden_state, final_cell_state) = self.lstm(input, (h_0, c_0))
+		final_output = self.label(final_hidden_state[-1]) # final_hidden_state.size() = (1, batch_size, hidden_size) & final_output.size() = (batch_size, output_size)		
+		return final_output
+     '''           
                 
     def forward(self,X):
-        '''
-        module_input=torch.Tensor(X).long().to(self.device)
-        #module_input = torch.from_numpy(X).float().to(self.device)
-        x = self.embedding(X)
-        x = self.sigmoid(X)
-        x = self.conv(X)
-        x = self.dropout(X)
-        x = self.relu(X)
-        x = self.maxpool(X)
-        x = self.lstm(X)
-        x = self.fc(X)
-        x = self.dropout(X)
-        x = self.alpha(X)
-        return module_input * X   
-        '''
         
         hidden_connections = []
         X = torch.Tensor(X).long().to(self.device)
         x1 = F.sigmoid(self.embedding(X))
         hidden_connections.append(x1)
-        x2 = F.sigmoid(self.conv(X))
+        x2 = F.sigmoid(self.lstm(X))
         hidden_connections.append(x2)
-        x3 = F.sigmoid(self.lstm(X))
-        hidden_connections.append(x3)
 
         output_class = []
         for i in range(self.max_num_hidden_layers):
@@ -222,10 +198,11 @@ class clstm(nn.Module):
         self.load_state_dict(o_dict)
 
 
-class clstm_THS(clstm):
-    def __init__(self, vocab_size,max_num_hidden_layers,embedding_dim, n_classes,n_filters,filter_size,
+class clstm_THS(lstm):
+    def __init__(self, vocab_size,max_num_hidden_layers,embedding_dim, n_classes,output_dim,
                   dropout, batch_size,b=0.99, n=0.01, s=0.2, use_cuda=False):
-        super().__init__(vocab_size,max_num_hidden_layers,embedding_dim, n_classes,n_filters,filter_size,
+        
+        super().__init__(vocab_size,max_num_hidden_layers,embedding_dim, n_classes,output_dim,
                   dropout, batch_size, b=b, n=n, s=s,use_cuda=use_cuda)
         self.e = Parameter(torch.tensor(e), requires_grad=False)
         self.arms_values = Parameter(torch.arange(n_classes), requires_grad=False)
